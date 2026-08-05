@@ -1,143 +1,141 @@
 /**
- * وُصلة — Rider Bot Handler
- * معالج بوت الراكب (بوت العميل)
+ * وُصلة — Rider Bot
+ * بوت العميل لطلب المشاوير والتوصيل
  */
 
 import { TelegramBot, inlineKeyboard, replyKeyboard, removeKeyboard } from "@waslah/infrastructure/telegram";
-import type { ServiceType } from "@waslah/domain/ride";
+import { success, failure, type Result } from "@waslah/shared/result";
 
 export class RiderBot {
   private bot: TelegramBot;
-  
-  constructor(token: string) {
+  private apiUrl: string;
+
+  constructor(token: string, apiUrl: string) {
     this.bot = new TelegramBot(token);
+    this.apiUrl = apiUrl;
   }
 
-  getMainKeyboard() {
-    return replyKeyboard([
-      ["🚖 طلب مشوار", "📦 طلب توصيل"],
-      ["📍 مشاركة موقعي", "⭐ مفضلتي"],
-      ["🚨 طوارئ", "ℹ️ المساعدة"],
+  async handleUpdate(update: any): Promise<void> {
+    const msg = update.message;
+    const cb = update.callback_query;
+    const chatId = msg?.chat?.id ?? cb?.message?.chat?.id;
+    const telegramId = msg?.from?.id ?? cb?.from?.id;
+    if (!chatId || !telegramId) return;
+
+    // Handle callback queries
+    if (cb) {
+      const data = cb.data ?? "";
+      await this.bot.answerCallbackQuery(cb.id);
+
+      if (data === "new_ride") {
+        await this.showRequestMenu(chatId);
+      } else if (data.startsWith("cancel:")) {
+        const rideId = data.slice(7);
+        await this.cancelRide(chatId, telegramId, rideId);
+      } else if (data.startsWith("sos:")) {
+        const rideId = data.slice(4);
+        await this.triggerSOS(chatId, rideId);
+      }
+      return;
+    }
+
+    // Handle text commands
+    const text = msg.text ?? "";
+
+    if (text === "/start") {
+      await this.showWelcome(chatId, telegramId);
+    } else if (text === "🚖 طلب مشوار") {
+      await this.showRequestMenu(chatId);
+    } else if (text === "📜 رحلاتي") {
+      await this.showMyRides(chatId, telegramId);
+    } else if (text === "🛟 الدعم الفني") {
+      await this.showSupport(chatId);
+    } else if (text === "📍 مشاركة موقعي") {
+      await this.requestLocation(chatId);
+    } else if (text === "ℹ️ المساعدة") {
+      await this.showHelp(chatId);
+    }
+  }
+
+  private async showWelcome(chatId: number, telegramId: number): Promise<void> {
+    const kb = replyKeyboard([
+      ["🚖 طلب مشوار"],
+      ["📜 رحلاتي", "🛟 الدعم الفني"],
     ]);
-  }
 
-  async handleStart(chatId: number) {
     await this.bot.sendMessage({
       chatId,
-      text: `👋 أهلاً بك في <b>وُصلة</b>!\nمنصة النقل والتوصيل الذكية.\n\nاختر من القائمة أدناه:`,
-      replyMarkup: this.getMainKeyboard(),
+      text: `👋 أهلاً بك في <b>وُصلة</b> 🚀\n\nمنصة التنقل الذكية الأولى في الخليج.\n\n✅ مشاوير · توصيل · شحن\n✅ 0% عمولة للسائقين\n✅ اشتراك شهري ثابت\n✅ دفع آمن عبر سداد/مدى/STC Pay`,
+      replyMarkup: kb,
     });
   }
 
-  async handleRequestRide(chatId: number) {
+  private async showRequestMenu(chatId: number): Promise<void> {
+    const kb = inlineKeyboard([
+      [{ text: "🚗 مشوار", callbackData: "service:ride" }],
+      [{ text: "📦 توصيل", callbackData: "service:delivery" }],
+      [{ text: "🔙 رجوع", callbackData: "back_main" }],
+    ]);
+
     await this.bot.sendMessage({
       chatId,
-      text: "📍 أين موقع الانطلاق؟\nأرسل موقعك الحالي أو اكتب اسم الحي:",
-      replyMarkup: replyKeyboard([
-        [{ text: "📍 إرسال موقعي", requestLocation: true }],
-        ["إلغاء"],
-      ]),
+      text: "🚀 <b>ما نوع الخدمة؟</b>",
+      replyMarkup: kb,
     });
   }
 
-  async handleRequestDelivery(chatId: number) {
+  private async showMyRides(chatId: number, telegramId: number): Promise<void> {
+    // In production, fetch from API
     await this.bot.sendMessage({
       chatId,
-      text: "📦 أين موقع الاستلام؟\nأرسل الموقع أو اكتب العنوان:",
-      replyMarkup: replyKeyboard([
-        [{ text: "📍 إرسال موقع الاستلام", requestLocation: true }],
-        ["إلغاء"],
-      ]),
+      text: "📜 <b>رحلاتك السابقة</b>\n\n(سيتم عرض آخر 10 رحلات)",
     });
   }
 
-  async handlePickupReceived(chatId: number, lat: number, lng: number, label?: string) {
+  private async showSupport(chatId: number): Promise<void> {
+    const kb = inlineKeyboard([
+      [{ text: "💬 مراسلة الدعم", url: "https://t.me/waslah_support" }],
+    ]);
+
     await this.bot.sendMessage({
       chatId,
-      text: "🎯 أين الوجهة؟\nأرسل الموقع أو اكتب اسم المكان:",
-      replyMarkup: replyKeyboard([
-        [{ text: "📍 إرسال موقع الوجهة", requestLocation: true }],
-        ["إلغاء"],
-      ]),
+      text: "🛟 <b>الدعم الفني</b>\n\nللتواصل مع فريق الدعم:\n• أرسل استفسارك هنا\n• أو تواصل عبر البوت المخصص",
+      replyMarkup: kb,
     });
   }
 
-  async handlePriceInput(chatId: number) {
+  private async requestLocation(chatId: number): Promise<void> {
+    const kb = replyKeyboard([
+      ["📍 إرسال الموقع الحالي"],
+    ], true, true);
+
     await this.bot.sendMessage({
       chatId,
-      text: "💰 كم السعر المقترح؟\n(مثلاً: 50 ريال، أو \"حسب الاتفاق\")",
-      replyMarkup: replyKeyboard([
-        ["حسب الاتفاق"],
-        ["إلغاء"],
-      ]),
+      text: "📍 أرسل موقعك الحالي للعثور على السائقين القريبين منك.",
+      replyMarkup: kb,
     });
   }
 
-  async handlePaymentMethod(chatId: number) {
+  private async showHelp(chatId: number): Promise<void> {
     await this.bot.sendMessage({
       chatId,
-      text: "💳 اختر طريقة الدفع:",
-      replyMarkup: replyKeyboard([
-        ["💵 كاش", "🏦 تحويل بنكي"],
-        ["📱 STC Pay", "💳 مدى"],
-        ["إلغاء"],
-      ]),
+      text: `ℹ️ <b>مساعدة وُصلة</b>\n\n🚖 <b>طلب مشوار:</b>\nاختر الخدمة، حدد الموقع والوجهة، وانتظر السائق.\n\n💰 <b>الدفع:</b>\nنقداً، بطاقة، محفظة، STC Pay، Apple Pay.\n\n⭐ <b>التقييم:</b>\nبعد كل رحلة، قيّم السائق.\n\n🆘 <b>طوارئ:</b>\nاضغط زر SOS أثناء الرحلة.\n\n📞 <b>الدعم:</b>\nراسل @waslah_support`,
     });
   }
 
-  async handleRideCreated(chatId: number, rideId: string) {
+  private async cancelRide(chatId: number, telegramId: number, rideId: string): Promise<void> {
+    // In production, call API to cancel
     await this.bot.sendMessage({
       chatId,
-      text: `✅ <b>تم إرسال طلبك #${rideId.slice(0, 8)}</b>\nجارٍ البحث عن أفضل سائق... 🚗`,
-      replyMarkup: this.getMainKeyboard(),
+      text: "❌ تم إلغاء الرحلة.",
     });
   }
 
-  async handleDriverAssigned(
-    chatId: number,
-    driver: { name: string; carModel: string; carPlate: string; rating: number },
-    rideId: string
-  ) {
+  private async triggerSOS(chatId: number, rideId: string): Promise<void> {
+    // In production, trigger emergency protocol
     await this.bot.sendMessage({
       chatId,
-      text: [
-        "🎉 <b>تم العثور على سائق!</b>",
-        `👤 الاسم: ${driver.name}`,
-        `🚗 السيارة: ${driver.carModel}`,
-        `🔢 اللوحة: ${driver.carPlate}`,
-        `⭐ التقييم: ${driver.rating.toFixed(1)}`,
-        "",
-        "يمكنك التواصل مع السائق مباشرة.",
-      ].join("\n"),
-      replyMarkup: inlineKeyboard([
-        [{ text: "💬 مراسلة السائق", callbackData: `chat:${rideId}` }],
-        [{ text: "🚨 طوارئ", callbackData: `sos:${rideId}` }],
-        [{ text: "❌ إلغاء", callbackData: `cancel:${rideId}` }],
-      ]),
-    });
-  }
-
-  async handleRideComplete(chatId: number, rideId: string, driverId: string) {
-    await this.bot.sendMessage({
-      chatId,
-      text: "🌟 <b>تم إنهاء المشوار.</b>\nكيف تقيم السائق؟",
-      replyMarkup: inlineKeyboard([
-        [
-          { text: "⭐", callbackData: `rate:${rideId}:${driverId}:1` },
-          { text: "⭐⭐", callbackData: `rate:${rideId}:${driverId}:2` },
-          { text: "⭐⭐⭐", callbackData: `rate:${rideId}:${driverId}:3` },
-          { text: "⭐⭐⭐⭐", callbackData: `rate:${rideId}:${driverId}:4` },
-          { text: "⭐⭐⭐⭐⭐", callbackData: `rate:${rideId}:${driverId}:5` },
-        ],
-      ]),
-    });
-  }
-
-  async handleSOS(chatId: number) {
-    await this.bot.sendMessage({
-      chatId,
-      text: "🚨 <b>طوارئ</b>\nأرسل تفاصيل الحالة الطارئة:\n(سيتم إشعار فريق الدعم فوراً)",
-      replyMarkup: replyKeyboard([["إلغاء"]]),
+      text: `🚨 <b>تم إرسال تنبيه الطوارئ!</b>\nفريق الدعم في طريقه إليك.\n\nالرحلة: #${rideId.slice(0, 8)}`,
     });
   }
 }

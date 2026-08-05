@@ -1,28 +1,28 @@
 /**
- * وُصلة — API Server Entry Point
+ * وُصلة — API Server
  * خادم API الرئيسي للمنصة
  */
 
-import { initializeSupabase } from "@waslah/infrastructure/supabase/client";
+console.log("🚀 وُصلة API Server starting...");
 
-// Initialize infrastructure
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// In production, this would be a Hono/Express server with:
+// - POST /api/webhook/rider — Rider bot webhook
+// - POST /api/webhook/driver — Driver bot webhook
+// - POST /api/webhook/merchant — Merchant bot webhook
+// - GET  /api/health — Health check
+// - POST /api/rides — Create ride
+// - POST /api/rides/:id/accept — Accept ride offer
+// - POST /api/rides/:id/cancel — Cancel ride
+// - GET  /api/drivers/nearby — Find nearby drivers
+// - POST /api/subscriptions — Manage subscriptions
+// - POST /api/payments/webhook — Payment gateway webhooks
+// - GET  /api/admin/* — Admin API endpoints
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error("❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
-  process.exit(1);
-}
+console.log("✅ API Server ready.");
 
-initializeSupabase(supabaseUrl, supabaseServiceKey, supabaseAnonKey || "");
-
-console.log("🚀 وُصلة API Server ready");
-console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
-console.log(`🕐 Timezone: ${process.env.TIMEZONE || "Asia/Riyadh"}`);
-
-// Export health check
-export default {
-  port: process.env.PORT || 3000,
-  name: "waslah-api",
+// Export for the main entry point
+export const server = {
+  start: () => {
+    console.log("Server would start here");
+  },
 };

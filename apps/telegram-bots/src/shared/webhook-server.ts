@@ -1,87 +1,32 @@
 /**
- * وُصلة — Bot Webhook Server
- * خادم ويبهوك موحد لجميع بوتات تيليجرام
+ * وُصلة — Webhook Server
+ * خادم استقبال Webhooks من تيليجرام
  */
 
-import { TelegramBot, verifyHmacSignature } from "@waslah/infrastructure/security";
+import { RiderBot } from "../rider/bot.js";
+import { DriverBot } from "../driver/bot.js";
 
 interface BotConfig {
-  token: string;
-  handler: (update: any) => Promise<void>;
+  riderToken: string;
+  driverToken: string;
+  apiUrl: string;
 }
 
-export class BotWebhookServer {
-  private bots: Map<string, BotConfig> = new Map();
-  private hmacSecret: string;
+export function startWebhookServer(config: BotConfig) {
+  const riderBot = new RiderBot(config.riderToken, config.apiUrl);
+  const driverBot = new DriverBot(config.driverToken, config.apiUrl);
 
-  constructor(hmacSecret: string) {
-    this.hmacSecret = hmacSecret;
-  }
-
-  registerBot(name: string, token: string, handler: (update: any) => Promise<void>) {
-    this.bots.set(name, { token, handler });
-    console.log(`🤖 Bot registered: ${name}`);
-  }
-
-  async handleWebhook(botName: string, update: any, signature?: string): Promise<boolean> {
-    const config = this.bots.get(botName);
-    if (!config) {
-      console.error(`❌ Unknown bot: ${botName}`);
-      return false;
-    }
-
-    // Verify HMAC signature if provided
-    if (signature) {
-      const payload = JSON.stringify(update);
-      if (!verifyHmacSignature(this.hmacSecret, payload, signature)) {
-        console.error(`❌ Invalid signature for bot: ${botName}`);
-        return false;
-      }
-    }
-
-    try {
-      await config.handler(update);
-      return true;
-    } catch (error) {
-      console.error(`❌ Error handling update for ${botName}:`, error);
-      return false;
-    }
-  }
-
-  async setAllWebhooks(baseUrl: string, secretToken?: string) {
-    for (const [name, config] of this.bots) {
-      const bot = new TelegramBot(config.token);
-      const webhookUrl = `${baseUrl}/webhook/${name}`;
-      const success = await bot.setWebhook(webhookUrl, secretToken);
-      console.log(`${success ? "✅" : "❌"} Webhook set for ${name}: ${webhookUrl}`);
-    }
-  }
-
-  getBotNames(): string[] {
-    return Array.from(this.bots.keys());
-  }
-}
-
-// Middleware to verify Telegram IP
-export function isTelegramIp(ip: string): boolean {
-  const TELEGRAM_RANGES = [
-    "149.154.160.0/20",
-    "91.108.4.0/22",
-    "91.108.56.0/22",
-    "91.108.8.0/22",
-  ];
+  // In production, this would be an HTTP server (e.g., Express or Hono)
+  // handling POST /webhook/rider and POST /webhook/driver
   
-  const ipNum = ipToNumber(ip);
-  
-  for (const range of TELEGRAM_RANGES) {
-    const [base, mask] = range.split("/");
-    const baseNum = ipToNumber(base);
-    const maskBits = ~(2 ** (32 - parseInt(mask)) - 1);
-    if ((ipNum & maskBits) === (baseNum & maskBits)) return true;
-  }
-  return false;
-}
-
-function ipToNumber(ip: string): number {
-  return ip.split(".").reduce((acc, oct) => (acc << 8) + parseInt(oct), 0) >>> 0;
+  return {
+    riderBot,
+    driverBot,
+    async handleRiderUpdate(update: any) {
+      await riderBot.handleUpdate(update);
+    },
+    async handleDriverUpdate(update: any) {
+      await driverBot.handleUpdate(update);
+    },
+  };
 }
