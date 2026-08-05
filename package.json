@@ -1,0 +1,33 @@
+{
+  "name": "waslah-platform",
+  "private": true,
+  "description": "وُصلة — المنصة اللوجستية الذكية عبر تيليجرام",
+  "scripts": {
+    "dev:api": "bun run --cwd apps/api-server dev",
+    "dev:admin": "bun run --cwd apps/admin-dashboard dev",
+    "dev:bots": "bun run --cwd apps/telegram-bots dev",
+    "build": "bun run --cwd apps/api-server build && bun run --cwd apps/admin-dashboard build && bun run --cwd apps/telegram-bots build",
+    "db:migrate": "bun run supabase db push",
+    "db:types": "bun run supabase gen types typescript --local > packages/infrastructure/supabase/database.types.ts",
+    "test": "bun test",
+    "lint": "bunx biome check .",
+    "format": "bunx biome format --write ."
+  },
+  "workspaces": [
+    "packages/*",
+    "packages/shared/*",
+    "packages/domain/*",
+    "packages/application/*",
+    "packages/infrastructure/*",
+    "apps/*"
+  ],
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.8.0",
+    "biome": "^1.9.0"
+  }
+}
